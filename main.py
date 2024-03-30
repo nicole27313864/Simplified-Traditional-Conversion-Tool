@@ -1,7 +1,8 @@
+import os
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtCore import Qt, QThread, Signal
 from qt_material import apply_stylesheet
-import os
 import re
 from opencc import OpenCC
 
@@ -40,16 +41,17 @@ class Worker(QThread):
 
             processed_files += 1
             self.progress_updated.emit(processed_files * 100 // pending_total_files)
-            print(f"路徑檔案總數: {total_files} 待處裡檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")
+            print(f"路徑檔案總數: {total_files} 待處理檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")
 
         print("轉換完成！")
+        # # self.finished.emit()  # 發送轉換完成的信號
 
 # 在ConverterApp類中新增一個方法以設置UI佈局
 class ConverterApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("簡繁轉換工具")
-        self.setGeometry(100, 100, 400, 150)
+        self.setGeometry(100, 100, 400, 200)
 
         self.directory_path = ""
 
@@ -67,18 +69,31 @@ class ConverterApp(QMainWindow):
         layout.addWidget(self.directory_label)
 
         # 將瀏覽按鈕添加到佈局中
-        self.browse_button = QPushButton("瀏覽", self)
+        self.browse_button = QPushButton("📁" + " 請選擇路徑", self)
         layout.addWidget(self.browse_button)
         self.browse_button.clicked.connect(self.select_directory)
 
-        # 將開始轉換按鈕添加到佈局中
-        self.convert_button = QPushButton("開始轉換", self)
+        # 將開始轉換按鈕添加到佈局中，並設置樣式為綠色
+        self.convert_button = QPushButton("❌請先選擇路徑❌", self)
         layout.addWidget(self.convert_button)
+        self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
         self.convert_button.clicked.connect(self.start_conversion)
 
         # 將進度條添加到佈局中
         self.progress_bar = QProgressBar(self)
         layout.addWidget(self.progress_bar)
+        
+        # 設置進度條的樣式，包括圓角
+        self.progress_bar.setStyleSheet("QProgressBar { border-radius: 4px; }")
+
+        # 創建字體標籤
+        self.font_label = QLabel(self)
+        self.font_label.setAlignment(Qt.AlignCenter)
+        self.font_label.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
+        layout.addWidget(self.font_label)
+
+        # 將 layout 設置為成員變量
+        self.layout = layout
 
         # 創建一個widget並將佈局設置為其主佈局
         widget = QWidget()
@@ -93,6 +108,15 @@ class ConverterApp(QMainWindow):
 
         self.center()
 
+        # 設置字體標籤的文字
+        font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSansTC-Regular.ttf')
+        font_id = QFontDatabase.addApplicationFont(font_path)
+        if font_id != -1:
+            font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
+            self.font_label.setText(f"目前使用的字體：{font_family}")
+        else:
+            print("Failed to load font")
+
     def center(self):
         # 取得第一個螢幕
         screen = QApplication.primaryScreen().geometry()
@@ -103,9 +127,11 @@ class ConverterApp(QMainWindow):
 
     def update_progress_bar(self, progress):
         self.progress_bar.setValue(progress)
+        self.progress_bar.setStyleSheet("QProgressBar::chunk { border-radius: 4px; border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;}")
 
     def show_message_box(self):
         QMessageBox.information(self, "轉換完成", "所有檔案轉換完成！")
+        self.progress_bar.setValue(0)  # 轉換完成後將進度條歸0
 
     def select_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "選擇資料夾")
@@ -113,6 +139,12 @@ class ConverterApp(QMainWindow):
             self.directory_path = directory
             self.directory_label.setText(directory)
             self.worker.directory = directory
+            self.convert_button.setText("✔️" + " 開始轉換 " + "✔️")
+            self.convert_button.setStyleSheet("border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;")
+            
+            # 更新 browse_button 样式，包括透明度
+            self.browse_button.setText("📁" + " 可變更路徑")
+            self.browse_button.setStyleSheet("border: 2px solid #43C59E; background: rgba(67, 197, 158, 0.2); color: rgba(255, 255, 255, 0.5);")
 
     def start_conversion(self):
         if self.directory_path:
@@ -127,7 +159,9 @@ if __name__ == "__main__":
     # 設置 Qt Material 主題樣式
     apply_stylesheet(app, theme='dark_pink.xml')
 
+    # 启动您的应用程序窗口
     converter_app = ConverterApp()
     converter_app.show()
 
+    # 運行應用程序
     sys.exit(app.exec())
