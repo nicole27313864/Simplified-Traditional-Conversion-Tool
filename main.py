@@ -1,66 +1,90 @@
 import os
 import re
 from opencc import OpenCC
-from tkinter import Tk, filedialog, StringVar
-from tkinter import ttk
-import threading
-from tkinter import messagebox
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
-def convert_file(file_path):
-    cc = OpenCC('s2twp')
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
+class Worker(QThread):
+    progress_updated = pyqtSignal(int)
+    finished = pyqtSignal()
 
-    # 將檔案內容從簡體字轉換為繁體字
-    converted_content = cc.convert(content)
+    def __init__(self, directory):
+        super().__init__()
+        self.directory = directory
 
-    # 替換 lang 屬性的值
-    converted_content = re.sub(r'lang="zh-CN"', 'lang="zh-TW"', converted_content)
+    def run(self):
+        cc = OpenCC('s2twp')
+        total_files = sum(len(files) for _, _, files in os.walk(self.directory))
+        files_to_convert = []
+        for root, _, files in os.walk(self.directory):
+            for file in files:
+                if file.endswith(('.html', '.css', '.js', '.yaml')):
+                    files_to_convert.append(os.path.join(root, file))
 
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(converted_content)
+        pending_total_files = len(files_to_convert)
+        processed_files = 0
+        for file_path in files_to_convert:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
 
-def convert_files_in_directory(directory):
-    total_files = sum(len(files) for _, _, files in os.walk(directory))
-    processed_files = 0
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith(('.html', '.css', '.js', '.yaml')):
-                file_path = os.path.join(root, file)
-                convert_file(file_path)
-                processed_files += 1
-                update_progress_bar(processed_files, total_files)
-                print("正在處理檔案:", file_path)
-    print("轉換完成！")
-    update_progress_bar(total_files, total_files)  # 將進度條設置為100%
-    messagebox.showinfo("完成", "檔案處理完成！")
+            # 將檔案內容從簡體字轉換為繁體字
+            converted_content = cc.convert(content)
 
-def update_progress_bar(processed_files, total_files):
-    progress = round((processed_files / total_files) * 100)
-    progress_bar['value'] = progress
-    root.update()  # 強制刷新 UI 界面
+            # 替換 lang 屬性的值
+            converted_content = re.sub(r'lang="zh-CN"', 'lang="zh-TW"', converted_content)
 
-def select_directory():
-    directory = filedialog.askdirectory()
-    if directory:
-        directory_path.set(directory)
-        threading.Thread(target=convert_files_in_directory, args=(directory,)).start()
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(converted_content)
 
-root = Tk()
-root.title("簡繁轉換工具")
+            processed_files += 1
+            self.progress_updated.emit(processed_files * 100 // pending_total_files)
+            print(f"路徑檔案總數: {total_files} 待處裡檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")
 
-directory_path = StringVar()
 
-label = ttk.Label(root, text="選擇資料夾:")
-label.grid(row=0, column=0, padx=5, pady=5)
+        print("轉換完成！")
+        self.finished.emit()
 
-directory_entry = ttk.Entry(root, textvariable=directory_path, width=50)
-directory_entry.grid(row=0, column=1, padx=5, pady=5)
+class ConverterApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("簡繁轉換工具")
+        self.setGeometry(100, 100, 400, 150)
 
-browse_button = ttk.Button(root, text="瀏覽", command=select_directory)
-browse_button.grid(row=0, column=2, padx=5, pady=5)
+        self.directory_path = ""
 
-progress_bar = ttk.Progressbar(root, orient='horizontal', length=300, mode='determinate')
-progress_bar.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
+        self.label = QLabel("選擇資料夾:", self)
+        self.label.move(20, 20)
 
-root.mainloop()
+        self.directory_label = QLabel(self)
+        self.directory_label.setGeometry(120, 20, 250, 25)
+
+        self.browse_button = QPushButton("瀏覽", self)
+        self.browse_button.setGeometry(300, 20, 80, 25)
+        self.browse_button.clicked.connect(self.select_directory)
+
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setGeometry(20, 60, 360, 25)
+
+        self.worker = Worker("")
+        self.worker.progress_updated.connect(self.update_progress_bar)
+        self.worker.finished.connect(self.show_message_box)
+
+    def update_progress_bar(self, progress):
+        self.progress_bar.setValue(progress)
+
+    def show_message_box(self):
+        QMessageBox.information(self, "轉換完成", "所有檔案轉換完成！")
+
+    def select_directory(self):
+        directory = QFileDialog.getExistingDirectory(self, "選擇資料夾")
+        if directory:
+            self.directory_path = directory
+            self.directory_label.setText(directory)
+            self.worker.directory = directory
+            self.worker.start()
+
+if __name__ == "__main__":
+    app = QApplication([])
+    converter_app = ConverterApp()
+    converter_app.show()
+    app.exec()
