@@ -1,12 +1,14 @@
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, QThread, Signal
+from qt_material import apply_stylesheet
 import os
 import re
 from opencc import OpenCC
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
+# 定義 Worker 類
 class Worker(QThread):
-    progress_updated = pyqtSignal(int)
-    finished = pyqtSignal()
+    progress_updated = Signal(int)
+    finished = Signal()
 
     def __init__(self, directory):
         super().__init__()
@@ -40,10 +42,9 @@ class Worker(QThread):
             self.progress_updated.emit(processed_files * 100 // pending_total_files)
             print(f"路徑檔案總數: {total_files} 待處裡檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")
 
-
         print("轉換完成！")
-        self.finished.emit()
 
+# 在ConverterApp類中新增一個方法以設置UI佈局
 class ConverterApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -52,22 +53,53 @@ class ConverterApp(QMainWindow):
 
         self.directory_path = ""
 
+        # 創建一個垂直佈局
+        layout = QVBoxLayout()
+
+        # 將選擇資料夾標籤添加到佈局中，並設置對齊方式為中心
         self.label = QLabel("選擇資料夾:", self)
-        self.label.move(20, 20)
+        self.label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.label)
 
+        # 將路徑標籤添加到佈局中，並設置對齊方式為中心
         self.directory_label = QLabel(self)
-        self.directory_label.setGeometry(120, 20, 250, 25)
+        self.directory_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.directory_label)
 
+        # 將瀏覽按鈕添加到佈局中
         self.browse_button = QPushButton("瀏覽", self)
-        self.browse_button.setGeometry(300, 20, 80, 25)
+        layout.addWidget(self.browse_button)
         self.browse_button.clicked.connect(self.select_directory)
 
+        # 將開始轉換按鈕添加到佈局中
+        self.convert_button = QPushButton("開始轉換", self)
+        layout.addWidget(self.convert_button)
+        self.convert_button.clicked.connect(self.start_conversion)
+
+        # 將進度條添加到佈局中
         self.progress_bar = QProgressBar(self)
-        self.progress_bar.setGeometry(20, 60, 360, 25)
+        layout.addWidget(self.progress_bar)
+
+        # 創建一個widget並將佈局設置為其主佈局
+        widget = QWidget()
+        widget.setLayout(layout)
+
+        # 將widget設置為中心窗口的主widget
+        self.setCentralWidget(widget)
 
         self.worker = Worker("")
         self.worker.progress_updated.connect(self.update_progress_bar)
         self.worker.finished.connect(self.show_message_box)
+
+        self.center()
+
+    def center(self):
+        # 取得第一個螢幕
+        screen = QApplication.primaryScreen().geometry()
+        # 取得視窗尺寸
+        size = self.geometry()
+        # 計算中心位置
+        self.move((screen.width() - size.width()) // 2, screen.height() * 0.40 - size.height() // 2)
 
     def update_progress_bar(self, progress):
         self.progress_bar.setValue(progress)
@@ -81,10 +113,21 @@ class ConverterApp(QMainWindow):
             self.directory_path = directory
             self.directory_label.setText(directory)
             self.worker.directory = directory
+
+    def start_conversion(self):
+        if self.directory_path:
             self.worker.start()
+        else:
+            QMessageBox.warning(self, "警告", "請先選擇資料夾！")
 
 if __name__ == "__main__":
-    app = QApplication([])
+    import sys
+    app = QApplication(sys.argv)
+
+    # 設置 Qt Material 主題樣式
+    apply_stylesheet(app, theme='dark_pink.xml')
+
     converter_app = ConverterApp()
     converter_app.show()
-    app.exec()
+
+    sys.exit(app.exec())
