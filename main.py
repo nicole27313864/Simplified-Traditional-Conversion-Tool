@@ -1,66 +1,167 @@
 import os
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtCore import Qt, QThread, Signal
+from qt_material import apply_stylesheet
 import re
 from opencc import OpenCC
-from tkinter import Tk, filedialog, StringVar
-from tkinter import ttk
 
-def convert_file(file_path):
-    cc = OpenCC('s2twp')
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
-    # 將檔案內容從簡體字轉換為繁體字
-    converted_content = cc.convert(content)
-    
-    # 替換 lang 屬性的值
-    converted_content = re.sub(r'lang="zh-CN"', 'lang="zh-TW"', converted_content)
-    
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(converted_content)
+# 定義 Worker 類
+class Worker(QThread):
+    progress_updated = Signal(int)
+    finished = Signal()
 
-def convert_files_in_directory(directory):
-    total_files = 0
-    processed_files = 0
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith(('.html', '.css', '.js', '.yaml')):
-                total_files += 1
-    
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith(('.html', '.css', '.js', '.yaml')):
-                file_path = os.path.join(root, file)
-                convert_file(file_path)
-                processed_files += 1
-                update_progress_bar(processed_files, total_files)
-                print("正在處裡檔案:", file_path)
-    print("轉換完成！")
+    def __init__(self, directory):
+        super().__init__()
+        self.directory = directory
 
-def update_progress_bar(processed_files, total_files):
-    progress = round((processed_files / total_files) * 100)
-    progress_bar['value'] = progress
+    def run(self):
+        cc = OpenCC('s2twp')
+        total_files = sum(len(files) for _, _, files in os.walk(self.directory))
+        files_to_convert = []
+        for root, _, files in os.walk(self.directory):
+            for file in files:
+                if file.endswith(('.html', '.css', '.js', '.yaml')):
+                    files_to_convert.append(os.path.join(root, file))
 
-def select_directory():
-    directory = filedialog.askdirectory()
-    if directory:
-        directory_path.set(directory)
-        convert_files_in_directory(directory)
+        pending_total_files = len(files_to_convert)
+        processed_files = 0
+        for file_path in files_to_convert:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
 
-root = Tk()
-root.title("簡繁轉換工具")
+            # 將檔案內容從簡體字轉換為繁體字
+            converted_content = cc.convert(content)
 
-directory_path = StringVar()
+            # 替換 lang 屬性的值
+            converted_content = re.sub(r'lang="zh-CN"', 'lang="zh-TW"', converted_content)
 
-label = ttk.Label(root, text="選擇資料夾:")
-label.grid(row=0, column=0, padx=5, pady=5)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(converted_content)
 
-directory_entry = ttk.Entry(root, textvariable=directory_path, width=50)
-directory_entry.grid(row=0, column=1, padx=5, pady=5)
+            processed_files += 1
+            self.progress_updated.emit(processed_files * 100 // pending_total_files)
+            print(f"路徑檔案總數: {total_files} 待處理檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")
 
-browse_button = ttk.Button(root, text="瀏覽", command=select_directory)
-browse_button.grid(row=0, column=2, padx=5, pady=5)
+        print("轉換完成！")
+        # # self.finished.emit()  # 發送轉換完成的信號
 
-progress_bar = ttk.Progressbar(root, orient='horizontal', length=300, mode='determinate')
-progress_bar.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
+# 在ConverterApp類中新增一個方法以設置UI佈局
+class ConverterApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("簡繁轉換工具")
+        self.setGeometry(100, 100, 400, 200)
 
-root.mainloop()
+        self.directory_path = ""
+
+        # 創建一個垂直佈局
+        layout = QVBoxLayout()
+
+        # 將選擇資料夾標籤添加到佈局中，並設置對齊方式為中心
+        self.label = QLabel("選擇資料夾:", self)
+        self.label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.label)
+
+        # 將路徑標籤添加到佈局中，並設置對齊方式為中心
+        self.directory_label = QLabel(self)
+        self.directory_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.directory_label)
+
+        # 將瀏覽按鈕添加到佈局中
+        self.browse_button = QPushButton("📁" + " 請選擇路徑", self)
+        layout.addWidget(self.browse_button)
+        self.browse_button.clicked.connect(self.select_directory)
+
+        # 將開始轉換按鈕添加到佈局中，並設置樣式為綠色
+        self.convert_button = QPushButton("❌請先選擇路徑❌", self)
+        layout.addWidget(self.convert_button)
+        self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
+        self.convert_button.clicked.connect(self.start_conversion)
+
+        # 將進度條添加到佈局中
+        self.progress_bar = QProgressBar(self)
+        layout.addWidget(self.progress_bar)
+        
+        # 設置進度條的樣式，包括圓角
+        self.progress_bar.setStyleSheet("QProgressBar { border-radius: 4px; }")
+
+        # 創建字體標籤
+        self.font_label = QLabel(self)
+        self.font_label.setAlignment(Qt.AlignCenter)
+        self.font_label.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
+        layout.addWidget(self.font_label)
+
+        # 將 layout 設置為成員變數
+        self.layout = layout
+
+        # 創建一個widget並將佈局設置為其主佈局
+        widget = QWidget()
+        widget.setLayout(layout)
+
+        # 將widget設置為中心窗口的主widget
+        self.setCentralWidget(widget)
+
+        self.worker = Worker("")
+        self.worker.progress_updated.connect(self.update_progress_bar)
+        self.worker.finished.connect(self.show_message_box)
+
+        self.center()
+
+        # 設置字體標籤的文字
+        font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSansTC-Regular.ttf')
+        font_id = QFontDatabase.addApplicationFont(font_path)
+        if font_id != -1:
+            font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
+            self.font_label.setText(f"目前使用的字體：{font_family}")
+        else:
+            print("Failed to load font")
+
+    def center(self):
+        # 取得第一個螢幕
+        screen = QApplication.primaryScreen().geometry()
+        # 取得視窗尺寸
+        size = self.geometry()
+        # 計算中心位置
+        self.move((screen.width() - size.width()) // 2, screen.height() * 0.40 - size.height() // 2)
+
+    def update_progress_bar(self, progress):
+        self.progress_bar.setValue(progress)
+        self.progress_bar.setStyleSheet("QProgressBar::chunk { border-radius: 4px; border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;}")
+
+    def show_message_box(self):
+        QMessageBox.information(self, "轉換完成", "所有檔案轉換完成！")
+        self.progress_bar.setValue(0)  # 轉換完成後將進度條歸0
+
+    def select_directory(self):
+        directory = QFileDialog.getExistingDirectory(self, "選擇資料夾")
+        if directory:
+            self.directory_path = directory
+            self.directory_label.setText(directory)
+            self.worker.directory = directory
+            self.convert_button.setText("✔️" + " 開始轉換 " + "✔️")
+            self.convert_button.setStyleSheet("border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;")
+            
+            # 更新 browse_button 樣式，包括透明度
+            self.browse_button.setText("📁" + " 可變更路徑")
+            self.browse_button.setStyleSheet("border: 2px solid #43C59E; background: rgba(67, 197, 158, 0.2); color: rgba(255, 255, 255, 0.5);")
+
+    def start_conversion(self):
+        if self.directory_path:
+            self.worker.start()
+        else:
+            QMessageBox.warning(self, "警告", "請先選擇資料夾！")
+
+if __name__ == "__main__":
+    import sys
+    app = QApplication(sys.argv)
+
+    # 設置 Qt Material 主題樣式
+    apply_stylesheet(app, theme='dark_pink.xml')
+
+    # 啟動您的應用程式窗口
+    converter_app = ConverterApp()
+    converter_app.show()
+
+    # 運行應用程式
+    sys.exit(app.exec())
