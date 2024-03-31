@@ -11,6 +11,7 @@ class Worker(QThread):
     progress_updated = Signal(int)
     finished = Signal()
     progress_message_updated = Signal(str)  # 新增進度訊息更新的信號
+    progress_percentage_updated = Signal(int)  # 新增進度百分比更新的信號
 
     def __init__(self, directory, file_extensions):
         super().__init__()
@@ -43,6 +44,7 @@ class Worker(QThread):
 
             processed_files += 1
             self.progress_updated.emit(processed_files * 100 // pending_total_files)
+            self.progress_percentage_updated.emit(processed_files * 100 // pending_total_files)  # 發送進度百分比更新的信號
             # DEBUG: 顯示檔案路徑和進度
             # print(f"路徑檔案總數: {total_files} 待處理檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")
             self.progress_message_updated.emit(f"路徑檔案總數: {total_files} 待處理檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")  # 發射進度訊息更新的信號
@@ -119,10 +121,14 @@ class ConverterApp(QMainWindow):
         # 將widget設置為中心窗口的主widget
         self.setCentralWidget(widget)
 
+        # 創建一個狀態列
+        self.statusBar().showMessage('Ready')
+
         # 創建 Worker 實例時將 processing_text_edit 作為參數傳遞給它
         self.worker = Worker("", [])
         self.worker.progress_updated.connect(self.update_progress_bar)
         self.worker.progress_message_updated.connect(self.update_processing_text_edit)  # 連接進度訊息更新的信號
+        self.worker.progress_percentage_updated.connect(self.update_status_bar)  # 連接進度百分比更新的信號
         self.worker.finished.connect(self.show_message_box)
 
         self.center()
@@ -213,7 +219,10 @@ class ConverterApp(QMainWindow):
     def update_processing_text_edit(self, progress_message):
         self.processing_text_edit.clear()
         self.processing_text_edit.append(progress_message)
-
+    
+    # 定義更新狀態列內容的槽函式
+    def update_status_bar(self, progress_percentage):
+        self.statusBar().showMessage(f"轉換進度: {progress_percentage}%")
 
 if __name__ == "__main__":
     import sys
