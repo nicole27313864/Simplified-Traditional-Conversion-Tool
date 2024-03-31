@@ -94,7 +94,7 @@ class ConverterApp(QMainWindow):
         self.font_label.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
         layout.addWidget(self.font_label)
 
-        # 將 layout 設置為成員變量
+        # 將 layout 設置為成員變數
         self.layout = layout
 
         # 創建一個widget並將佈局設置為其主佈局
@@ -168,15 +168,23 @@ class ConverterApp(QMainWindow):
 if __name__ == "__main__":
     import sys
 
-    # 启动您的应用程序窗口
+    # 啟動您的應用程式窗口
     app = QApplication(sys.argv)
 
-    # 設置 Qt Material 主題樣式
-    apply_stylesheet(app, theme='dark_pink.xml')
+    # 設置 Qt Material 自訂義 XML 文件路徑
+    custom_theme_path = os.path.join(os.path.dirname(__file__), 'themes/dark.xml')
 
-    # 启动您的应用程序窗口
+    # 檢查自訂主題文件是否存在
+    if os.path.exists(custom_theme_path):
+        # 應用自訂主題
+        apply_stylesheet(app, theme=custom_theme_path)
+    else:
+        print("Custom theme file not found!")
+
+
+    # 啟動您的應用程式窗口
     converter_app = ConverterApp()
     converter_app.show()
 
-    # 运行应用程序
+    # 運行應用程式
     sys.exit(app.exec())
