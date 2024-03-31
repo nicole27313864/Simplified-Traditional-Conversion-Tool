@@ -1,9 +1,9 @@
 import os
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox, QVBoxLayout, QWidget, QTextEdit, QLineEdit
+import re
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox, QVBoxLayout, QWidget, QTextEdit
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtCore import Qt, QThread, Signal
 from qt_material import apply_stylesheet
-import re
 from opencc import OpenCC
 
 # 定義 Worker 類
@@ -43,9 +43,11 @@ class Worker(QThread):
 
             processed_files += 1
             self.progress_updated.emit(processed_files * 100 // pending_total_files)
+            # DEBUG: 顯示檔案路徑和進度
             # print(f"路徑檔案總數: {total_files} 待處理檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")
             self.progress_message_updated.emit(f"路徑檔案總數: {total_files} 待處理檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")  # 發射進度訊息更新的信號
-            
+            if processed_files == pending_total_files:
+                self.progress_message_updated.emit("所有檔案轉換完成！")
 
         # self.finished.emit()  # 發送轉換完成的信號
 
@@ -74,12 +76,14 @@ class ConverterApp(QMainWindow):
 
         # 將瀏覽按鈕添加到佈局中
         self.browse_button = QPushButton("📁" + " 請選擇路徑", self)
+        self.browse_button.setStyleSheet("border: 2px solid #E5446D; background: rgba(229,68,109, 0.2); color: #E5446D;")
         layout.addWidget(self.browse_button)
         self.browse_button.clicked.connect(self.select_directory)
 
         # 添加多行文本框以接收使用者輸入的檔案副檔名
         self.extension_input = QTextEdit(self)
-        self.extension_input.setPlaceholderText("輸入檔案副檔名，每行一個（例如：.html）")
+        self.extension_input.setPlaceholderText("輸入檔案副檔名，請以【空格】【換行】或【,】區分\n\n(例如：html, js, css, yaml, text） 副檔名前可選擇不加【.】")
+        self.extension_input.setStyleSheet("border: 2px solid #E5446D;  color: #FFFFFF;")
         layout.addWidget(self.extension_input)
 
         # 將開始轉換按鈕添加到佈局中，並設置樣式為綠色
@@ -123,6 +127,9 @@ class ConverterApp(QMainWindow):
 
         self.center()
 
+        # 監聽附檔名輸入框的變化
+        self.extension_input.textChanged.connect(self.update_button_ststus_style)
+
         # 設置字體標籤的文字
         font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSansTC-Regular.ttf')
         font_id = QFontDatabase.addApplicationFont(font_path)
@@ -148,26 +155,59 @@ class ConverterApp(QMainWindow):
         QMessageBox.information(self, "轉換完成", "所有檔案轉換完成！")
         self.progress_bar.setValue(0)  # 轉換完成後將進度條歸0
 
+    def extensions_input_changed(self):
+        # 修改副檔名處理
+        extensions = self.extension_input.toPlainText().replace(".", "").replace(",", " ").split()  # 去除"."後再分割
+        extensions = [f".{ext}" for ext in extensions]  # 在每個副檔名前面加上"."
+        return extensions
+    
     def select_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "選擇資料夾")
+
         if directory:
             self.directory_path = directory
             self.directory_label.setText(directory)
             self.worker.directory = directory
-            self.file_extensions = self.extension_input.toPlainText().split()  # 將多行文本分割成副檔名列表
-            self.convert_button.setText("✔️" + " 開始轉換 " + "✔️")
-            self.convert_button.setStyleSheet("border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;")
+            self.extensions_input_changed()  # 檢查副檔名輸入框是否有值
+
             
             # 更新 browse_button 樣式，包括透明度
             self.browse_button.setText("📁" + " 可變更路徑")
-            self.browse_button.setStyleSheet("border: 2px solid #43C59E; background: rgba(67, 197, 158, 0.2); color: rgba(255, 255, 255, 0.5);")
+            self.browse_button.setStyleSheet("border: 2px solid #43C59E; background: rgba(67, 197, 158, 0.2); color: #43C59E;")
+            self.update_button_ststus_style()  # 檢查路徑是否有值並更新按鈕狀態
+
+    def update_button_ststus_style(self):
+        # 監聽副檔名輸入框的變化
+        # extensions = self.extension_input.toPlainText().replace(".", "").replace(",", " ").split()  # 去除"."後再分割
+        # extensions = [f".{ext}" for ext in extensions]  # 在每個副檔名前面加上"."
+        extensions = self.extensions_input_changed()
+        # DEBUG: 顯示副檔名輸入框內容
+        print("附檔名輸入框內容:", extensions)
+        if self.directory_path and extensions:
+            self.convert_button.setText("✔️ 開始轉換 ✔️")
+            self.convert_button.setStyleSheet("border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;")
+            self.extension_input.setStyleSheet("border: 2px solid #43C59E; color: #FFFFFF;")
+        elif extensions:
+            self.convert_button.setText("❌請先選擇路徑❌")
+            self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
+            self.extension_input.setStyleSheet("border: 2px solid #43C59E; color: #FFFFFF;")
+        elif self.directory_path:
+            self.convert_button.setText("❌請輸入副檔名❌")
+            self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
+            self.extension_input.setStyleSheet("border: 2px solid #E5446D;  color: #FFFFFF;")
 
     def start_conversion(self):
-        if self.directory_path and self.file_extensions:  # 確保資料夾路徑和副檔名都已獲取
-            self.worker.file_extensions = self.file_extensions  # 將副檔名列表傳遞給 Worker
-            self.worker.start()
-        else:
-            QMessageBox.warning(self, "警告", "請先選擇資料夾並輸入檔案副檔名！")
+        if not self.directory_path:  # 檢查是否選擇了資料夾
+            QMessageBox.warning(self, "警告", "請選擇資料夾！")
+            return
+        
+        if not self.extensions_input_changed():  # 檢查是否輸入了副檔名
+            QMessageBox.warning(self, "警告", "請輸入檔案副檔名！")
+            return
+
+        # 如果路徑和副檔名都已獲取，則開始轉換
+        self.worker.file_extensions = self.extensions_input_changed()  # 將副檔名列表傳遞給 Worker
+        self.worker.start()
 
     # 定義更新編輯區域內容的槽函式
     def update_processing_text_edit(self, progress_message):
