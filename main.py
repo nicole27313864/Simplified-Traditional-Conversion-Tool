@@ -193,12 +193,16 @@ class ConverterApp(QMainWindow):
             self.convert_button.setText("✔️ 開始轉換 ✔️")
             self.convert_button.setStyleSheet("border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;")
             self.extension_input.setStyleSheet("border: 2px solid #43C59E; color: #FFFFFF;")
-        elif extensions:
+        elif extensions != []:
             self.convert_button.setText("❌請先選擇路徑❌")
             self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
             self.extension_input.setStyleSheet("border: 2px solid #43C59E; color: #FFFFFF;")
         elif self.directory_path:
             self.convert_button.setText("❌請輸入副檔名❌")
+            self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
+            self.extension_input.setStyleSheet("border: 2px solid #E5446D;  color: #FFFFFF;")
+        else:
+            self.convert_button.setText("❌請選擇路徑❌")
             self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
             self.extension_input.setStyleSheet("border: 2px solid #E5446D;  color: #FFFFFF;")
 
