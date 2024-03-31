@@ -1,4 +1,5 @@
 import os
+# import psutil
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox, QVBoxLayout, QWidget
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtCore import Qt, QThread, Signal
@@ -41,6 +42,7 @@ class Worker(QThread):
 
             processed_files += 1
             self.progress_updated.emit(processed_files * 100 // pending_total_files)
+            # Debug: print progress
             print(f"路徑檔案總數: {total_files} 待處理檔案進度: ({str(processed_files).zfill(len(str(pending_total_files)))} / {pending_total_files}) {os.path.relpath(file_path, self.directory)}")
 
         print("轉換完成！")
@@ -92,7 +94,7 @@ class ConverterApp(QMainWindow):
         self.font_label.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
         layout.addWidget(self.font_label)
 
-        # 將 layout 設置為成員變數
+        # 將 layout 設置為成員變量
         self.layout = layout
 
         # 創建一個widget並將佈局設置為其主佈局
@@ -116,6 +118,17 @@ class ConverterApp(QMainWindow):
             self.font_label.setText(f"目前使用的字體：{font_family}")
         else:
             print("Failed to load font")
+
+        # 檢查並關閉相同進程
+        # process_name_to_check = "your_process_name.exe"
+        # for proc in psutil.process_iter(['pid', 'name']):
+        #     if proc.info['name'] == process_name_to_check:
+        #         print(f"Found existing process with name: {process_name_to_check}, pid: {proc.info['pid']}. Closing it.")
+        #         try:
+        #             os.kill(proc.info['pid'], 9)  # 強制終止進程
+        #             print(f"Process with pid {proc.info['pid']} has been terminated.")
+        #         except Exception as e:
+        #             print(f"Failed to terminate process with pid {proc.info['pid']}: {e}")
 
     def center(self):
         # 取得第一個螢幕
@@ -154,14 +167,16 @@ class ConverterApp(QMainWindow):
 
 if __name__ == "__main__":
     import sys
+
+    # 启动您的应用程序窗口
     app = QApplication(sys.argv)
 
     # 設置 Qt Material 主題樣式
     apply_stylesheet(app, theme='dark_pink.xml')
 
-    # 啟動您的應用程式窗口
+    # 启动您的应用程序窗口
     converter_app = ConverterApp()
     converter_app.show()
 
-    # 運行應用程式
+    # 运行应用程序
     sys.exit(app.exec())
