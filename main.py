@@ -73,7 +73,7 @@ class ConverterApp(QMainWindow):
         self.directory_layout.addWidget(self.directory_label)
 
         self.browse_button = QPushButton("📁" + " 請選擇路徑", self)
-        self.browse_button.setStyleSheet("border: 2px solid #E5446D; background: rgba(229,68,109, 0.2); color: #E5446D;")
+        self.browse_button.setStyleSheet("border: 2px solid #E5446D; background: rgba(229, 68, 109, 0.2); color: #E5446D;")
         self.directory_layout.addWidget(self.browse_button)
         self.browse_button.clicked.connect(self.select_directory)
 
@@ -161,6 +161,7 @@ class ConverterApp(QMainWindow):
             self.directory_label.setText("")
             # self.browse_button.setText("❌取消選擇路徑❌")
             self.browse_button.setText("📋" + " 一鍵複製結果內容")
+            self.browse_button.setStyleSheet("border: 2px solid #43C59E; color: #43C59E;")
             self.extension_input.setPlaceholderText("請在此輸入文本內容")
             self.convert_button.setText("✔️ 開始轉換 ✔️")
             self.processing_text_edit.setReadOnly(False)  # 取消唯讀
@@ -173,7 +174,13 @@ class ConverterApp(QMainWindow):
             self.mode = "path"
             self.label.setText("選擇資料夾:")
             self.directory_label.setText("")
-            self.browse_button.setText("📁" + " 請選擇路徑")
+            if self.directory_path:
+                self.browse_button.setText("📁" + " 可變更路徑")
+                self.browse_button.setStyleSheet("border: 2px solid #43C59E; background: rgba(67, 197, 158, 0.2); color: #43C59E;")
+                self.directory_label.setText(self.directory_path)
+            else:
+                self.browse_button.setText("📁" + " 請選擇路徑")
+                self.browse_button.setStyleSheet("border: 2px solid #E5446D; background: rgba(229, 68, 109, 0.2); color: #E5446D;")
             self.extension_input.setPlaceholderText("輸入檔案副檔名，請以空格、換行或逗號區分\n\n(例如：html, js, css, yaml, text） 副檔名前可選擇不加.")
             self.convert_button.setText("❌請先選擇路徑❌")
             self.processing_text_edit.setReadOnly(True)  # 設為唯讀
@@ -268,7 +275,7 @@ class ConverterApp(QMainWindow):
                 self.copy_to_clipboard()
         else:
             self.worker.run_text_mode(self.extension_input.toPlainText())
-            
+
     def copy_to_clipboard(self):
         clipboard = QGuiApplication.clipboard()
         clipboard.setText(self.processing_text_edit.toPlainText())
