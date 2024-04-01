@@ -1,7 +1,7 @@
 import os
 import re
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox, QVBoxLayout, QWidget, QTextEdit, QComboBox, QHBoxLayout
-from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication
 from PySide6.QtCore import Qt, QThread, Signal
 from qt_material import apply_stylesheet
 from opencc import OpenCC
@@ -58,6 +58,8 @@ class ConverterApp(QMainWindow):
 
         self.directory_path = ""
         self.file_extensions = []
+        self.directory_selected = False  # 新增一個變數來追蹤是否已選擇資料夾
+
 
         layout = QVBoxLayout()
 
@@ -157,11 +159,16 @@ class ConverterApp(QMainWindow):
             self.mode = "text"
             self.label.setText("輸入文本:")
             self.directory_label.setText("")
-            self.browse_button.setText("❌取消選擇路徑❌")
+            # self.browse_button.setText("❌取消選擇路徑❌")
+            self.browse_button.setText("📋" + " 一鍵複製結果內容")
             self.extension_input.setPlaceholderText("請在此輸入文本內容")
             self.convert_button.setText("✔️ 開始轉換 ✔️")
             self.processing_text_edit.setReadOnly(False)  # 取消唯讀
             self.browse_button.clicked.disconnect(self.select_directory)  # 取消選擇路徑的功能
+            self.browse_button.clicked.connect(self.copy_to_clipboard)  # 連接一鍵複製結果內容的功能
+            
+            # 在切換模式時不顯示提示
+            self.statusBar().showMessage('Ready')
         else:
             self.mode = "path"
             self.label.setText("選擇資料夾:")
@@ -170,7 +177,8 @@ class ConverterApp(QMainWindow):
             self.extension_input.setPlaceholderText("輸入檔案副檔名，請以空格、換行或逗號區分\n\n(例如：html, js, css, yaml, text） 副檔名前可選擇不加.")
             self.convert_button.setText("❌請先選擇路徑❌")
             self.processing_text_edit.setReadOnly(True)  # 設為唯讀
-            self.browse_button.clicked.connect(self.select_directory)  # 重新連接選擇路徑的功能
+            self.browse_button.clicked.disconnect(self.copy_to_clipboard)  # 取消一鍵複製結果內容的功能
+            self.browse_button.clicked.connect(self.select_directory)  # 連接選擇路徑的功能
         self.update_button_status_style()
 
     def update_progress_bar(self, progress):
@@ -190,6 +198,7 @@ class ConverterApp(QMainWindow):
         directory = QFileDialog.getExistingDirectory(self, "選擇資料夾")
 
         if directory:
+            self.directory_selected = True  # 設定為已選擇資料夾
             self.directory_path = directory
             self.directory_label.setText(directory)
             self.worker.directory = directory
@@ -228,7 +237,7 @@ class ConverterApp(QMainWindow):
                 self.extension_input.setStyleSheet("border: 2px solid #E5446D;  color: #FFFFFF;")
 
     def start_conversion(self):
-        if not self.directory_path:
+        if self.mode == "path" and not self.directory_selected:  # 在路徑模式下檢查是否選擇了資料夾
             QMessageBox.warning(self, "警告", "請選擇資料夾！")
             return
         
@@ -254,9 +263,17 @@ class ConverterApp(QMainWindow):
         if self.mode == "path":
             self.worker.file_extensions = self.extensions_input_changed()
             self.worker.start()
+            # 在文本模式下將內容複製到剪貼板
+            if self.mode == "text":
+                self.copy_to_clipboard()
         else:
             self.worker.run_text_mode(self.extension_input.toPlainText())
-
+            
+    def copy_to_clipboard(self):
+        clipboard = QGuiApplication.clipboard()
+        clipboard.setText(self.processing_text_edit.toPlainText())
+        self.browse_button.setText("✔️ 已複製到剪貼板 ✔️")
+        
     def update_processing_text_edit(self, progress_message):
         self.processing_text_edit.clear()
         self.processing_text_edit.append(progress_message)
