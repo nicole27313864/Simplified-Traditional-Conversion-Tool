@@ -2,7 +2,7 @@ import os
 import re
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QProgressBar, QMessageBox, QVBoxLayout, QWidget, QTextEdit, QComboBox, QHBoxLayout
 from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from qt_material import apply_stylesheet
 from opencc import OpenCC
 
@@ -85,12 +85,12 @@ class ConverterApp(QMainWindow):
         layout.addWidget(self.extension_input)
 
         self.button_layout = QHBoxLayout()
-        self.mode_switch_button = QPushButton("切換模式", self)
+        self.mode_switch_button = QPushButton("✏️ 切換模式 ✏️", self)
         self.mode_switch_button.setStyleSheet("border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;")
         self.mode_switch_button.clicked.connect(self.switch_mode)
         self.button_layout.addWidget(self.mode_switch_button)
 
-        self.convert_button = QPushButton("❌請先選擇路徑❌", self)
+        self.convert_button = QPushButton("❌ 請先選擇路徑 ❌", self)
         self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
         self.button_layout.addWidget(self.convert_button)
         self.convert_button.clicked.connect(self.start_conversion)
@@ -149,6 +149,10 @@ class ConverterApp(QMainWindow):
 
         self.mode = "path"
 
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)  # 設置為單次觸發
+        self.timer.timeout.connect(self.restore_button_text)
+
     def center(self):
         screen = QApplication.primaryScreen().geometry()
         size = self.geometry()
@@ -159,7 +163,7 @@ class ConverterApp(QMainWindow):
             self.mode = "text"
             self.label.setText("輸入文本:")
             self.directory_label.setText("")
-            # self.browse_button.setText("❌取消選擇路徑❌")
+            # self.browse_button.setText("❌ 取消選擇路徑 ❌")
             self.browse_button.setText("📋" + " 一鍵複製結果內容")
             self.browse_button.setStyleSheet("border: 2px solid #43C59E; color: #43C59E;")
             self.extension_input.setPlaceholderText("請在此輸入文本內容")
@@ -182,7 +186,7 @@ class ConverterApp(QMainWindow):
                 self.browse_button.setText("📁" + " 請選擇路徑")
                 self.browse_button.setStyleSheet("border: 2px solid #E5446D; background: rgba(229, 68, 109, 0.2); color: #E5446D;")
             self.extension_input.setPlaceholderText("輸入檔案副檔名，請以空格、換行或逗號區分\n\n(例如：html, js, css, yaml, text） 副檔名前可選擇不加.")
-            self.convert_button.setText("❌請先選擇路徑❌")
+            self.convert_button.setText("❌ 請先選擇路徑 ❌")
             self.processing_text_edit.setReadOnly(True)  # 設為唯讀
             self.browse_button.clicked.disconnect(self.copy_to_clipboard)  # 取消一鍵複製結果內容的功能
             self.browse_button.clicked.connect(self.select_directory)  # 連接選擇路徑的功能
@@ -222,15 +226,15 @@ class ConverterApp(QMainWindow):
                 self.convert_button.setStyleSheet("border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;")
                 self.extension_input.setStyleSheet("border: 2px solid #43C59E; color: #FFFFFF;")
             elif extensions != []:
-                self.convert_button.setText("❌請先選擇路徑❌")
+                self.convert_button.setText("❌ 請先選擇路徑 ❌")
                 self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
                 self.extension_input.setStyleSheet("border: 2px solid #43C59E; color: #FFFFFF;")
             elif self.directory_path:
-                self.convert_button.setText("❌請輸入副檔名❌")
+                self.convert_button.setText("❌ 請輸入副檔名 ❌")
                 self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
                 self.extension_input.setStyleSheet("border: 2px solid #E5446D;  color: #FFFFFF;")
             else:
-                self.convert_button.setText("❌請選擇路徑❌")
+                self.convert_button.setText("❌ 請選擇路徑 ❌")
                 self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
                 self.extension_input.setStyleSheet("border: 2px solid #E5446D;  color: #FFFFFF;")
         else:
@@ -239,7 +243,7 @@ class ConverterApp(QMainWindow):
                 self.convert_button.setStyleSheet("border: 2px solid #43C59E; background: #43C59E; color: #FFFFFF;")
                 self.extension_input.setStyleSheet("border: 2px solid #43C59E; color: #FFFFFF;")
             else:
-                self.convert_button.setText("❌請輸入文本❌")
+                self.convert_button.setText("❌ 請輸入文本 ❌")
                 self.convert_button.setStyleSheet("border: 2px solid #5448C8; background: #5448C8; color: #FFFFFF;")
                 self.extension_input.setStyleSheet("border: 2px solid #E5446D;  color: #FFFFFF;")
 
@@ -276,10 +280,18 @@ class ConverterApp(QMainWindow):
         else:
             self.worker.run_text_mode(self.extension_input.toPlainText())
 
+        # 設置計時器，在一段時間後恢復按鈕文字
+        self.browse_button.setText("✔️ 轉換成功")
+        self.timer.start(800) # 800 毫秒，即 0.8 秒
+
+    def restore_button_text(self):
+        self.browse_button.setText("📋" + " 一鍵複製結果內容")
+
     def copy_to_clipboard(self):
         clipboard = QGuiApplication.clipboard()
         clipboard.setText(self.processing_text_edit.toPlainText())
         self.browse_button.setText("✔️ 已複製到剪貼板 ✔️")
+        self.timer.start(800) # 800 毫秒，即 0.8 秒
         
     def update_processing_text_edit(self, progress_message):
         self.processing_text_edit.clear()
