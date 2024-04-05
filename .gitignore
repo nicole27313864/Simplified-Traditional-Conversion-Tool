@@ -1,1 +1,4 @@
 dist/
+Lib/
+Scripts/
+pyvenv.cfg
